@@ -1,0 +1,54 @@
+{
+"collections":[  
+      {  
+         "fields":[  
+            {  
+               "type":"ObjectIdType",
+               "logical_type":"OID",
+               "field_name":"_id",
+               "desc": "Identifier of the document."
+            },
+            {  
+               "type":"ObjectIdType",
+               "logical_type":"RID",
+               "reference_to": "hunk",
+               "field_name":"hunk_id",
+               "desc": "ObjectID of the hunk for which the blame line was calculated."
+            },
+            {  
+               "type":"IntegerType",
+               "logical_type":"Offset",
+               "field_name":"hunk_line",
+               "desc": "The line number within the hunk (within the old lines: old_start <= hunk_line < old_start+old_lines)."
+            },
+            {  
+               "type":"IntegerType",
+               "logical_type":"Offset",
+               "field_name":"source_line",
+               "desc": "The corresponding line number in the blamed commit for the line within the hunk."
+            },
+            {  
+               "type":"IntegerType",
+               "logical_type":"Offset",
+               "field_name":"line_count",
+               "desc": "The number of contiguous lines within the hunk that refer to the same blamed commit (by default 1, unless compression is used)."
+            },
+            {  
+               "type":"ObjectIdType",
+               "logical_type":"RID",
+               "reference_to": "commit",
+               "field_name":"blamed_commit_id",
+               "desc": "ObjectID that links to the blamed commit, in which the line within the hunk was last modified."
+            },
+            {  
+               "type":"StringType",
+               "logical_type":"Location",
+               "field_name":"source_path",
+               "desc": "Path of the file within the blamed commit (useful for CFA, avoids the need to track file names accross commits)"
+            }
+         ],
+         "desc": "For each line in each hunk, this collection includes references to the blamed commit in which the old lines in the hunk were last modified as well as the corresponding line number in the blamed commit. If compression is used, contiguous blocks of hunk blame lines are grouped together and the lengths of the block is indicated by the line_count, otherwie the line_count is always 1.",
+         "collection_name":"hunk_blame_line"
+      }
+   ]
+}

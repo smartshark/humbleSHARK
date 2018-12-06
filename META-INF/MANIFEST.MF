@@ -1,0 +1,11 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: humbleSHARK
+Bundle-SymbolicName: humbleSHARK
+Bundle-Version: 1.0.0.qualifier
+Automatic-Module-Name: humbleSHARK
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8
+Main-Class: humbleSHARK.HumbleApp
+Require-Bundle: commonSHARK
+Bundle-ClassPath: lib/org.eclipse.jgit_5.0.0.201806131550-r.jar,
+ .

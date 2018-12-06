@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="create_run_jar" name="Create Runnable Jar for Project humbleSHARK with libraries in sub-folder">
+    <!--this file was created by Eclipse Runnable JAR Export Wizard-->
+    <!--ANT 1.7 is required                                        -->
+    <!--define folder properties-->
+    <property name="dir.buildfile" value="."/>
+    <property name="dir.workspace" value="${dir.buildfile}/workspace"/>
+    <property name="dir.jarfile" value="${dir.buildfile}/build"/>
+    <target name="create_run_jar">
+        <jar destfile="${dir.jarfile}/humbleSHARK.jar">
+            <manifest>
+                <attribute name="Main-Class" value="humbleSHARK.HumbleApp"/>
+                <attribute name="Class-Path" value=". humbleSHARK_lib/mongo-java-driver-3.4.0.jar humbleSHARK_lib/morphia-1.3.2-sources.jar humbleSHARK_lib/morphia-1.3.2.jar humbleSHARK_lib/logback-classic-1.2.3.jar humbleSHARK_lib/logback-core-1.2.3.jar humbleSHARK_lib/slf4j-api-1.7.25.jar humbleSHARK_lib/jSHARK-1.0-SNAPSHOT.jar humbleSHARK_lib/org.apache.commons.cli_1.2.0.v201404270220.jar humbleSHARK_lib/org.eclipse.jgit_5.0.0.201806131550-r.jar"/>
+            </manifest>
+            <fileset dir="${dir.workspace}/commonSHARK/bin"/>
+            <fileset dir="${dir.workspace}/humbleSHARK/bin"/>
+        </jar>
+        <delete dir="${dir.jarfile}/humbleSHARK_lib"/>
+        <mkdir dir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/mongo-java-driver-3.4.0.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/morphia-1.3.2-sources.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/morphia-1.3.2.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/logback-classic-1.2.3.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/logback-core-1.2.3.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/slf4j-api-1.7.25.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/jSHARK-1.0-SNAPSHOT.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/commonSHARK/lib/org.apache.commons.cli_1.2.0.v201404270220.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+        <copy file="${dir.workspace}/humbleSHARK/lib/org.eclipse.jgit_5.0.0.201806131550-r.jar" todir="${dir.jarfile}/humbleSHARK_lib"/>
+    </target>
+</project>
