@@ -1,5 +1,4 @@
 /bin/
 /properties/
-/stats.txt
 /build/
-/.gradle/
+/.settings/
