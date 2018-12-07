@@ -1,0 +1,7 @@
+includeFlat "commonSHARK"
+
+println rootProject.name
+println project(':commonSHARK').name
+
+//project(':commonSHARK').projectDir = new File(settingsDir, '../commonSHARK')
+//project(':commonSHARK').buildFileName = 'build.gradle'
