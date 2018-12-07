@@ -57,14 +57,9 @@ public class HumbleApp {
 		} else {
 			app.processCommit();
 		}
-		
-//		HumbleStats stats = new HumbleStats();
-//		stats.getStatistics();
-//		stats.inspectRepository();
 	}
 	
 	public HumbleApp() {
-		//init
 		init();
 	}
 
@@ -75,9 +70,9 @@ public class HumbleApp {
 			datastore = DatabaseHandler.createDatastore(HumbleParameter.getInstance());
 			targetstore = datastore;
 			vcs = datastore.find(VCSSystem.class)
-        		.field("url").equal(HumbleParameter.getInstance().getUrl()).get();
+				.field("url").equal(HumbleParameter.getInstance().getUrl()).get();
 			repository = FileRepositoryBuilder.create(
-					new java.io.File(HumbleParameter.getInstance().getRepoPath()+"/.git"));
+				new java.io.File(HumbleParameter.getInstance().getRepoPath()+"/.git"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -85,7 +80,7 @@ public class HumbleApp {
 
 	public void processRepository() {
 		List<Commit> commits = datastore.find(Commit.class)
-				.field("vcs_system_id").equal(vcs.getId()).asList();
+			.field("vcs_system_id").equal(vcs.getId()).asList();
 		int i = 0;
 		int size = commits.size();
 		for (Commit commit : commits) {
@@ -123,7 +118,6 @@ public class HumbleApp {
 		//get parent
 		//	-> hopefully this works for the blames 
 		//	   otherwise last action needs to be resolved instead
-        
         String parentRevision = getParentRevisionFromDB(commit.getRevisionHash());
         if (parentRevision == null) {
         	return;
@@ -131,78 +125,42 @@ public class HumbleApp {
 
         //load actions
         List<FileAction> actions = datastore.find(FileAction.class)
-        		.field("commit_id").equal(commit.getId()).asList();
+        	.field("commit_id").equal(commit.getId()).asList();
 
         //load files
         logger.debug(commit.getRevisionHash().substring(0, 8) + " " + commit.getAuthorDate());
         for (FileAction a : actions) {
         	//check for special cases: mode A, R, D, etc.
-        	if (a.getMode().equals("A")) {
+    		if (a.getMode().equals("A")) {
         		//skip newly added
         		continue;
         	}
         	
-    		//TODO: if rename action -> use old file name?
-            File file = datastore.get(File.class, a.getFileId());
+        	//TODO: if rename action -> use old file name?
+        	File file = datastore.get(File.class, a.getFileId());
             logger.debug("  "+a.getMode()+"  "+file.getPath());
 
+            //load previous action?
             //try more accurate parent resolution
+            //-> may require graph reconstruction
+            //-> may be a good idea to store (not the same as parent)
+            //  -> can parent work still?
             if (HumbleParameter.getInstance().isUseActionBasedParent()) {
             	parentRevision = getParentRevisionFromDB(commit.getRevisionHash(), file.getPath());
             }
             
             //load hunks
             List<Hunk> hunks = datastore.find(Hunk.class)
-            		.field("file_action_id").equal(a.getId()).asList();
+            	.field("file_action_id").equal(a.getId()).asList();
             
-            //-> double check off-by-one (0-based or 1-based)
-            //  -> [old|new]StartLine is 0-based when [old|new]Lines = 0
-            //     - hunk removed or added
-            //     - only affects the corresponding side [old|new]
-            //  -> [old|new]StartLine is 1-based when [old|new]Lines > 0
-            //     - hunk modified
-            //-> make sure it is consistent for old and new
-            //  -> interpolate as necessary
-
             //hunk interpolation (not saved)
-            for (Hunk h : hunks) {
-            	if (h.getOldLines()==0) {
-            		h.setOldStart(h.getOldStart()+1);
-            	}
-            	if (h.getNewLines()==0) {
-            		h.setNewStart(h.getNewStart()+1);
-            	}
-            }
+            interpolateHunks(hunks);
 
-            //-> split hunks with gaps (max 1 line gap permitted)?
-            //	-> skip gap lines instead
-            //  -> blame lines will not fully correspond to hunks 
-
-            //load previous action?
-            //-> may require graph reconstruction
-            //-> may be a good idea to store (not the same as parent)
-            //  -> can parent work still?
-            
-            //from Git
-            //calculate blames for previous commit/action
-            //filter hunk-related lines only
-            //-> default: line -> blamed commit
-            //  -> will result in lots of entries
-            //	-> most comfortable to work with later
-            //calculate blame lines
-            //-> target hunk/commit reference
-            //  -> note hunk is on commit, blame is on previous action/parent
-            //-> line number
-            //-> source/blamed commit
+            //get blame lines from git
             List<HunkBlameLine> blameLines = getBlameLines(hunks, parentRevision, file.getPath());
             DETECTED_BLAMELINES+=blameLines.size();
 
             //compress
-            //-> start-count -> blamed commit
-            //	-> if count is often 1 it makes no difference
-            //  -> during testing reduced number of blame lines by ~70%
-            //-> hunk -> blamed commits? (not implemented
-            //	-> lossy - especially at logical level impossible to determine blamed commits afterwards
             if (HumbleParameter.getInstance().isUseCompression()) {
             	blameLines = compressBlameLines(blameLines);
             	COMPRESSED_BLAMELINES+=blameLines.size();
@@ -211,7 +169,7 @@ public class HumbleApp {
             //clear existing records
             for (Hunk h : hunks) {
             	targetstore.delete(targetstore.find(HunkBlameLine.class)
-            			.field("hunk_id").equal(h.getId()));
+            		.field("hunk_id").equal(h.getId()));
             }
             
             //store blame lines
@@ -225,6 +183,26 @@ public class HumbleApp {
 		logger.info("  Found " + DETECTED_BLAMELINES + " blame lines.");
 		logger.info("  Compressed " + COMPRESSED_BLAMELINES + " blame lines.");
 		logger.info(("  Stored " + STORED_BLAMELINES + " blame lines."));
+	}
+
+	private void interpolateHunks(List<Hunk> hunks) {
+        //-> double check off-by-one (0-based or 1-based)
+        //  -> [old|new]StartLine is 0-based when [old|new]Lines = 0
+        //     - hunk removed or added
+        //     - only affects the corresponding side [old|new]
+        //  -> [old|new]StartLine is 1-based when [old|new]Lines > 0
+        //     - hunk modified
+        //-> make sure it is consistent for old and new
+        //  -> interpolate as necessary
+
+		for (Hunk h : hunks) {
+			if (h.getOldLines()==0) {
+				h.setOldStart(h.getOldStart()+1);
+			}
+			if (h.getNewLines()==0) {
+				h.setNewStart(h.getNewStart()+1);
+			}
+		}
 	}
 
 	private String getParentRevisionFromDB(String hash) {
@@ -255,13 +233,12 @@ public class HumbleApp {
     		//handle merge commits: skip over merged parent and take its parent
     		//check if this can be done more precisely with actions
     		String parentHash = commit.getParents().get(0);
-//    		logger.warn("  Multiple parents for "+hash+", proceeding with first parent "+parentHash);
     		logger.info("    Evaluating parent actions for "+path+" at "+hash);
     		for (String p : commit.getParents()) {
     			Commit parent = getCommit(p);
     	        //load actions
     	        List<FileAction> actions = datastore.find(FileAction.class)
-    	        		.field("commit_id").equal(parent.getId()).asList();
+    	        	.field("commit_id").equal(parent.getId()).asList();
     	        for (FileAction a : actions) {
     	        	//check for special cases: mode A, R, etc.
     	        	if (a.getMode().equals("A")) {
@@ -285,6 +262,17 @@ public class HumbleApp {
 	}
 	
 	List<HunkBlameLine> getBlameLines(List<Hunk> hunks, String parentRevision, String path) {
+        //calculate blames for previous commit/action
+        //filter hunk-related lines only
+        //-> default: line -> blamed commit
+        //  -> will result in lots of entries
+        //	-> most comfortable to work with later
+        //calculate blame lines
+        //-> target hunk/commit reference
+        //  -> note hunk is on commit, blame is on previous action/parent
+        //-> line number
+        //-> source/blamed commit
+
 		List<HunkBlameLine> blameLines = new ArrayList<>();
 		try {
 			//get blame for parent
@@ -296,32 +284,7 @@ public class HumbleApp {
 			}
 
 			for (Hunk h : hunks) {
-				String[] lines = h.getContent().split("\n");
-				//get old lines including gaps
-				List<String> oldGappedLines = Arrays.stream(lines).filter(l -> !l.startsWith("+")).collect(Collectors.toList());
-				for (int line = h.getOldStart(); line < h.getOldStart()+h.getOldLines(); line++) {
-					//skip gap lines
-					if (!oldGappedLines.get(line-h.getOldStart()).startsWith("-")) {
-						continue;
-					}
-					
-					//need to take gapLines into account? -> no
-					RevCommit sourceCommit = blame.getSourceCommit(line-1);
-					Commit blamed = getCommit(sourceCommit.getName());
-
-					HunkBlameLine hbl = new HunkBlameLine();
-					hbl.setHunkId(h.getId());
-					hbl.setHunkLine(line);
-					//getSourceLine is 0-based, so line-1
-					//returned line value is also 0-based, so +1
-					//need to take gapLines into account -> no
-					hbl.setSourceLine(blame.getSourceLine(line-1)+1);
-					hbl.setBlamedCommitId(blamed.getId());
-					if (!HumbleParameter.getInstance().isSkipSourcePaths()) {
-						hbl.setSourcePath(blame.getSourcePath(line-1));
-					}
-					blameLines.add(hbl);
-				}
+				blameLines.addAll(getBlameLines(h, blame));
 			}
 		} catch (Exception e) {
 			logger.warn(e.getMessage());
@@ -332,6 +295,47 @@ public class HumbleApp {
 		}
 		//return objects
 		return blameLines;
+	}
+
+	List<HunkBlameLine> getBlameLines(Hunk h, BlameResult blame) {
+		List<HunkBlameLine> blameLines = new ArrayList<>();
+
+		//-> split hunks with gaps (max 1 line gap permitted)?
+        //	-> skip gap lines instead
+        //  -> blame lines will not fully correspond to hunks 
+		List<String> oldGappedLines = getOldGappedLines(h);
+		
+		for (int line = h.getOldStart(); line < h.getOldStart()+h.getOldLines(); line++) {
+			//skip gap lines
+			if (!oldGappedLines.get(line-h.getOldStart()).startsWith("-")) {
+				continue;
+			}
+			
+			//need to take gapLines into account? -> no
+			RevCommit sourceCommit = blame.getSourceCommit(line-1);
+			Commit blamed = getCommit(sourceCommit.getName());
+
+			HunkBlameLine hbl = new HunkBlameLine();
+			hbl.setHunkId(h.getId());
+			hbl.setHunkLine(line);
+			//getSourceLine is 0-based, so line-1
+			//returned line value is also 0-based, so +1
+			//need to take gapLines into account -> no
+			hbl.setSourceLine(blame.getSourceLine(line-1)+1);
+			hbl.setBlamedCommitId(blamed.getId());
+			if (!HumbleParameter.getInstance().isSkipSourcePaths()) {
+				hbl.setSourcePath(blame.getSourcePath(line-1));
+			}
+			blameLines.add(hbl);
+		}
+		return blameLines;
+	}
+
+	List<String> getOldGappedLines(Hunk h) {
+		String[] lines = h.getContent().split("\n");
+		//get old lines including gaps
+		List<String> oldGappedLines = Arrays.stream(lines).filter(l -> !l.startsWith("+")).collect(Collectors.toList());
+		return oldGappedLines;
 	}
 
 	HunkBlameLine compressContiguousBlameLines(List<HunkBlameLine> blameLines) {
@@ -353,6 +357,12 @@ public class HumbleApp {
 		List<HunkBlameLine> compressedBlameLines = new ArrayList<>();
     	HunkBlameLine last = null;
 		List<HunkBlameLine> toBeCompressed = new ArrayList<>();
+		
+        //-> start-count -> blamed commit
+        //	-> if count is often 1 it makes no difference
+        //  -> during testing reduced number of blame lines by ~70%
+        //-> hunk -> blamed commits? (not implemented)
+        //	-> lossy - especially at logical level impossible to determine blamed commits afterwards
 
 		for (HunkBlameLine hbl : blameLines) {
     		if (last!=null
@@ -382,6 +392,7 @@ public class HumbleApp {
 			compressedBlameLines.add(compressed);
 			toBeCompressed.clear();
 		}
+		
 		return compressedBlameLines;
 	}
 	
@@ -409,12 +420,11 @@ public class HumbleApp {
 		if (!commitCache.containsKey(hash)) {
 			//load commit
 			Commit commit = datastore.find(Commit.class)
-					.field("vcs_system_id").equal(vcs.getId())
-					.field("revision_hash").equal(hash).get();
+				.field("vcs_system_id").equal(vcs.getId())
+				.field("revision_hash").equal(hash).get();
 			commitCache.put(hash, commit);
 		}
 		return commitCache.get(hash);
 	}
-	
 
 }
