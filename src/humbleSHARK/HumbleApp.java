@@ -161,7 +161,7 @@ public class HumbleApp {
             DETECTED_BLAMELINES+=blameLines.size();
 
             //compress
-            if (HumbleParameter.getInstance().isUseCompression()) {
+            if (!HumbleParameter.getInstance().isSkipCompression()) {
             	blameLines = compressBlameLines(blameLines);
             	COMPRESSED_BLAMELINES+=blameLines.size();
             }

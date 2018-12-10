@@ -43,11 +43,11 @@
             "description": "path to the project repository"
         },
         {
-            "name": "compress",
+            "name": "skip_compression",
             "required": false,
             "position": 3,
             "type": "execute",
-            "description": "use compression (group contiguous lines, recommeded)"
+            "description": "skip compression (group contiguous lines, not recommeded)"
         },
         {
             "name": "url",

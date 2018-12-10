@@ -45,9 +45,9 @@ public class HumbleOptionHandler extends OptionHandler {
 	    option.setArgs(0);
 	    options.addOption(option);
 
-		option = new Option("C", "Use compression. Default: No");
+		option = new Option("SC", "Skip compression. Default: No");
 	    option.setRequired(false);
-	    option.setLongOpt("compress");
+	    option.setLongOpt("skip_compression");
 	    option.setArgs(0);
 	    options.addOption(option);
 
