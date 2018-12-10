@@ -1,11 +1,10 @@
 {
     "name": "humbleSHARK",
     "author": "Philip Makedonski",
-    "version": "0.10",
+    "version": "1.0.1",
     "plugin_type": "repo",
     "linux_libraries": [
-        "git", 
-        "ant"
+        "git"
     ],
     "created_collections": [
 		{

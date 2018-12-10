@@ -4,14 +4,18 @@ TARGET=tmp/humbleSHARK_plugin
 current=`pwd`
 mkdir -p $TARGET
 mkdir -p $TARGET/build/
-mkdir -p $TARGET/workspace/humbleSHARK/
-cp -R ../src $TARGET/workspace/humbleSHARK/
+mkdir -p $TARGET/humbleSHARK/
+cp -R ../src $TARGET/humbleSHARK/
+cp -R ../lib $TARGET/humbleSHARK/
+cp -R ../gradle* $TARGET/humbleSHARK/
+cp ../build.gradle $TARGET/humbleSHARK/
+cp ../settings.gradle $TARGET/humbleSHARK/
 
-mkdir -p $TARGET/workspace/commonSHARK/
-cp -R ../src $TARGET/workspace/commonSHARK/
-cp -R ../../commonSHARK/lib $TARGET/workspace/commonSHARK/
+mkdir -p $TARGET/commonSHARK/
+cp -R ../../commonSHARK/src $TARGET/commonSHARK/
+cp -R ../../commonSHARK/lib $TARGET/commonSHARK/
+cp ../../commonSHARK/build.gradle $TARGET/commonSHARK/
 
-cp ../build-target.xml $TARGET/
 cp * $TARGET/
 cd $TARGET
 
