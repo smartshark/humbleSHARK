@@ -8,7 +8,7 @@ cp -R $REPOSITORY_PATH "/dev/shm/$NEW_UUID"
 COMMAND="java -jar $PLUGIN_PATH/build/humbleSHARK.jar --input /dev/shm/$NEW_UUID --url $4 --db-hostname $5 --db-port $6 --db-database $7"
 
 if [ ! -z ${3} ] && [ ${3} != "None" ]; then
-	COMMAND="$COMMAND --compress"
+	COMMAND="$COMMAND --skip_compression"
 fi
 
 if [ ! -z ${13+x} ] && [ ${13} != "None" ]; then

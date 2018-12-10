@@ -27,8 +27,8 @@ public class HumbleConfigurationHandler extends ConfigurationHandler {
 			props.add("-r");
 			props.add(properties.getProperty("revision"));
 		}
-		if (properties.containsKey("compress")) {
-			props.add("-C");
+		if (properties.containsKey("skip_compression")) {
+			props.add("-SC");
 		}
 		if (properties.containsKey("merges")) {
 			props.add("-M");

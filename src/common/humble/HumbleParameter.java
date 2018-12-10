@@ -15,7 +15,7 @@ public class HumbleParameter extends Parameter {
 	
 	private boolean processMerges;
 	private boolean useActionBasedParent;
-	private boolean useCompression;
+	private boolean skipCompression;
 	private boolean skipSourcePaths;
 
 
@@ -36,7 +36,7 @@ public class HumbleParameter extends Parameter {
 		url = cmd.getOptionValue("u");
 		processMerges = cmd.hasOption("M");
 		useActionBasedParent = cmd.hasOption("ABP");
-		useCompression = cmd.hasOption("C");
+		skipCompression = cmd.hasOption("SC");
 		skipSourcePaths = cmd.hasOption("SP");
 	}
 	
@@ -75,9 +75,9 @@ public class HumbleParameter extends Parameter {
 		return useActionBasedParent;
 	}
 
-	public boolean isUseCompression() {
+	public boolean isSkipCompression() {
 	    checkIfInitialised();
-		return useCompression;
+		return skipCompression;
 	}
 
 	public boolean isSkipSourcePaths() {
