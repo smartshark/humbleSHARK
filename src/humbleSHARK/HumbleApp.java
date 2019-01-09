@@ -138,7 +138,7 @@ public class HumbleApp {
         	
         	//TODO: if rename action -> use old file name?
         	File file = datastore.get(File.class, a.getFileId());
-            logger.debug("  "+a.getMode()+"  "+file.getPath());
+            logger.info("  "+a.getMode()+"  "+file.getPath());
 
             if (file.getPath().endsWith(".pdf")) {
             	//skip pdfs for which blame information is incomplete
