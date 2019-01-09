@@ -140,6 +140,11 @@ public class HumbleApp {
         	File file = datastore.get(File.class, a.getFileId());
             logger.debug("  "+a.getMode()+"  "+file.getPath());
 
+            if (file.getPath().endsWith(".pdf")) {
+            	//skip pdfs for which blame information is incomplete
+            	continue;
+            }
+            
             //load previous action?
             //try more accurate parent resolution
             //-> may require graph reconstruction
