@@ -36,6 +36,12 @@ public class HumbleConfigurationHandler extends ConfigurationHandler {
 		if (properties.containsKey("action_based_parents")) {
 			props.add("-ABP");
 		}
+		if (properties.containsKey("progress")) {
+			props.add("-RP");
+		}
+		if (properties.containsKey("skip_source_paths")) {
+			props.add("-SP");
+		}
 		return props;
 	}
 }

@@ -23,6 +23,9 @@ if [ ! -z ${15+x} ] && [ ${15} != "None" ]; then
     COMMAND="$COMMAND --skip_source_paths"
 fi
 
+if [ ! -z ${16+x} ] && [ ${16} != "None" ]; then
+    COMMAND="$COMMAND --record_progress"
+fi
 
 if [ ! -z ${12+x} ] && [ ${12} != "None" ]; then
     COMMAND="$COMMAND --debug ${12}"

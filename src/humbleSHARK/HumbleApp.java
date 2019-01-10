@@ -3,10 +3,12 @@ package humbleSHARK;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.bson.types.ObjectId;
 import org.eclipse.jgit.api.BlameCommand;
 import org.eclipse.jgit.blame.BlameResult;
 import org.eclipse.jgit.lib.Repository;
@@ -26,6 +28,7 @@ import de.ugoe.cs.smartshark.model.File;
 import de.ugoe.cs.smartshark.model.FileAction;
 import de.ugoe.cs.smartshark.model.Hunk;
 import de.ugoe.cs.smartshark.model.HunkBlameLine;
+import de.ugoe.cs.smartshark.model.PluginProgress;
 import de.ugoe.cs.smartshark.model.VCSSystem;
 
 /**
@@ -99,6 +102,7 @@ public class HumbleApp {
 	}
 	
 	public void processCommit(Commit commit) {
+		resetProgess(commit.getId());
         int DETECTED_BLAMELINES = 0;
         int COMPRESSED_BLAMELINES = 0;
         int STORED_BLAMELINES = 0;
@@ -130,6 +134,7 @@ public class HumbleApp {
         //load files
         logger.debug(commit.getRevisionHash().substring(0, 8) + " " + commit.getAuthorDate());
         for (FileAction a : actions) {
+    		resetProgess(a.getId());
         	//check for special cases: mode A, R, D, etc.
     		if (a.getMode().equals("A")) {
         		//skip newly added
@@ -182,12 +187,40 @@ public class HumbleApp {
             	targetstore.save(hbl);
             	STORED_BLAMELINES++;
             }
+            
+    		logProgess(a.getId(), "action");
         }
         
         logger.info("Analyzed commit: " + commit.getRevisionHash());
 		logger.info("  Found " + DETECTED_BLAMELINES + " blame lines.");
 		logger.info("  Compressed " + COMPRESSED_BLAMELINES + " blame lines.");
 		logger.info(("  Stored " + STORED_BLAMELINES + " blame lines."));
+
+		logProgess(commit.getId(), "commit");
+	}
+
+	private void resetProgess(ObjectId targetId) {
+		if (HumbleParameter.getInstance().isRecordProgress()) {
+			//TODO: instead of/in addition to deleting, set to "STARTED"?
+			//      - keep the object between start and end?
+			targetstore.delete(targetstore.find(PluginProgress.class)
+					.field("plugin").equal("humbleSHARK")
+					.field("project_id").equal(vcs.getProjectId())
+					.field("target_id").equal(targetId));
+		}
+	}
+	
+	private void logProgess(ObjectId targetId, String type) {
+		if (HumbleParameter.getInstance().isRecordProgress()) {
+			PluginProgress p = new PluginProgress();
+			p.setPlugin("humbleSHARK");
+			p.setTime(new Date());
+			p.setProjectId(vcs.getProjectId());
+			p.setTargetId(targetId);
+			p.setStatus("DONE");
+			p.setType(type);
+			targetstore.save(p);
+		}
 	}
 
 	private void interpolateHunks(List<Hunk> hunks) {

@@ -55,7 +55,7 @@ dependencies {
 }
 
 mainClassName = 'humbleSHARK.HumbleApp'
-version = '1.0.2'
+version = '1.0.4'
 
 shadowJar {
     configurations = [project.configurations.compile]

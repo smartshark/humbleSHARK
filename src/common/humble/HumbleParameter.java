@@ -3,7 +3,7 @@ package common.humble;
 import common.Parameter;
 
 public class HumbleParameter extends Parameter {
-	protected String version = "0.10";
+	protected String version = "1.0.4";
 	protected static HumbleParameter instance;
 
 	// required parameter
@@ -17,6 +17,7 @@ public class HumbleParameter extends Parameter {
 	private boolean useActionBasedParent;
 	private boolean skipCompression;
 	private boolean skipSourcePaths;
+	private boolean recordProgress;
 
 
 	public static synchronized HumbleParameter getInstance() {
@@ -38,6 +39,7 @@ public class HumbleParameter extends Parameter {
 		useActionBasedParent = cmd.hasOption("ABP");
 		skipCompression = cmd.hasOption("SC");
 		skipSourcePaths = cmd.hasOption("SP");
+		recordProgress = cmd.hasOption("RP");
 	}
 	
 	@Override
@@ -83,6 +85,15 @@ public class HumbleParameter extends Parameter {
 	public boolean isSkipSourcePaths() {
 	    checkIfInitialised();
 		return skipSourcePaths;
+	}
+
+	public boolean isRecordProgress() {
+	    checkIfInitialised();
+		return recordProgress;
+	}
+
+	public void setRecordProgress(boolean recordProgress) {
+		this.recordProgress = recordProgress;
 	}
 
 }

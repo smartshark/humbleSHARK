@@ -1,7 +1,7 @@
 {
     "name": "humbleSHARK",
     "author": "Philip Makedonski",
-    "version": "1.0.2",
+    "version": "1.0.4",
     "plugin_type": "repo",
     "linux_libraries": [
         "git"
@@ -132,6 +132,13 @@
             "position": 15,
             "type": "execute",
             "description": "do not save source paths within blamed commit (not recommended)"
+        },
+        {
+            "name": "record_progress",
+            "required": false,
+            "position": 16,
+            "type": "execute",
+            "description": "record progress in a separate collection"
         }
     ]
 }
