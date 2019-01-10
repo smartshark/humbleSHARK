@@ -83,7 +83,9 @@ public class HumbleApp {
 
 	public void processRepository() {
 		List<Commit> commits = datastore.find(Commit.class)
-			.field("vcs_system_id").equal(vcs.getId()).asList();
+			.field("vcs_system_id").equal(vcs.getId())
+			.project("code_entity_states", false)
+			.asList();
 		int i = 0;
 		int size = commits.size();
 		for (Commit commit : commits) {
@@ -459,7 +461,9 @@ public class HumbleApp {
 			//load commit
 			Commit commit = datastore.find(Commit.class)
 				.field("vcs_system_id").equal(vcs.getId())
-				.field("revision_hash").equal(hash).get();
+				.field("revision_hash").equal(hash)
+				.project("code_entity_states", false)
+				.get();
 			commitCache.put(hash, commit);
 		}
 		return commitCache.get(hash);
