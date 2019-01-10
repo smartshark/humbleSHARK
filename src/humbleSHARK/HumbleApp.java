@@ -85,6 +85,7 @@ public class HumbleApp {
 		List<Commit> commits = datastore.find(Commit.class)
 			.field("vcs_system_id").equal(vcs.getId())
 			.project("code_entity_states", false)
+			.order("author_date")
 			.asList();
 		int i = 0;
 		int size = commits.size();
