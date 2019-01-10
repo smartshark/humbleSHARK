@@ -92,8 +92,4 @@ public class HumbleParameter extends Parameter {
 		return recordProgress;
 	}
 
-	public void setRecordProgress(boolean recordProgress) {
-		this.recordProgress = recordProgress;
-	}
-
 }
