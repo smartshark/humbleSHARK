@@ -3,12 +3,10 @@ package humbleSHARK;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.bson.types.ObjectId;
 import org.eclipse.jgit.api.BlameCommand;
 import org.eclipse.jgit.blame.BlameResult;
 import org.eclipse.jgit.lib.Repository;
@@ -20,7 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Logger;
 import common.ConfigurationHandler;
-import common.DatabaseHandler;
+import common.MongoAdapter;
 import common.humble.HumbleConfigurationHandler;
 import common.humble.HumbleParameter;
 import de.ugoe.cs.smartshark.model.Commit;
@@ -28,7 +26,6 @@ import de.ugoe.cs.smartshark.model.File;
 import de.ugoe.cs.smartshark.model.FileAction;
 import de.ugoe.cs.smartshark.model.Hunk;
 import de.ugoe.cs.smartshark.model.HunkBlameLine;
-import de.ugoe.cs.smartshark.model.PluginProgress;
 import de.ugoe.cs.smartshark.model.VCSSystem;
 
 /**
@@ -36,9 +33,8 @@ import de.ugoe.cs.smartshark.model.VCSSystem;
  */
 
 public class HumbleApp {
+	protected MongoAdapter adapter;
 	protected Datastore targetstore;
-	protected Datastore datastore;
-	private HashMap<String, Commit> commitCache = new HashMap<>();
 	private HashMap<String, RevCommit> revisionCache = new HashMap<>();
 	protected VCSSystem vcs;
 	protected Repository repository;
@@ -67,26 +63,27 @@ public class HumbleApp {
 	}
 
 	void init() {
+		adapter = new MongoAdapter(HumbleParameter.getInstance());
+		adapter.setPluginName("humbleSHARK");
+		adapter.setRecordProgress(HumbleParameter.getInstance().isRecordProgress());
+		targetstore = adapter.getTargetstore();
+		adapter.setVcs(HumbleParameter.getInstance().getUrl());
+		if (adapter.getVcs()==null) {
+			logger.error("No VCS information found for "+HumbleParameter.getInstance().getUrl());
+			System.exit(1);
+		}
+
 		try {
-			//TODO: make optional or merge
-//			targetstore = DatabaseHandler.createDatastore("localhost", 27017, "cfashark");
-			datastore = DatabaseHandler.createDatastore(HumbleParameter.getInstance());
-			targetstore = datastore;
-			vcs = datastore.find(VCSSystem.class)
-				.field("url").equal(HumbleParameter.getInstance().getUrl()).get();
 			repository = FileRepositoryBuilder.create(
 				new java.io.File(HumbleParameter.getInstance().getRepoPath()+"/.git"));
 		} catch (IOException e) {
 			e.printStackTrace();
+			System.exit(1);
 		}
 	}
 
 	public void processRepository() {
-		List<Commit> commits = datastore.find(Commit.class)
-			.field("vcs_system_id").equal(vcs.getId())
-			.project("code_entity_states", false)
-			.order("author_date")
-			.asList();
+		List<Commit> commits = adapter.getCommits();
 		int i = 0;
 		int size = commits.size();
 		for (Commit commit : commits) {
@@ -101,11 +98,11 @@ public class HumbleApp {
 	}
 
 	public void processCommit(String hash) {
-        processCommit(getCommit(hash));
+        processCommit(adapter.getCommit(hash));
 	}
 	
 	public void processCommit(Commit commit) {
-		resetProgess(commit.getId());
+		adapter.resetProgess(commit.getId());
         int DETECTED_BLAMELINES = 0;
         int COMPRESSED_BLAMELINES = 0;
         int STORED_BLAMELINES = 0;
@@ -131,13 +128,12 @@ public class HumbleApp {
         }
 
         //load actions
-        List<FileAction> actions = datastore.find(FileAction.class)
-        	.field("commit_id").equal(commit.getId()).asList();
+        List<FileAction> actions = adapter.getActions(commit);
 
         //load files
         logger.debug(commit.getRevisionHash().substring(0, 8) + " " + commit.getAuthorDate());
         for (FileAction a : actions) {
-    		resetProgess(a.getId());
+    		adapter.resetProgess(a.getId());
         	//check for special cases: mode A, R, D, etc.
     		if (a.getMode().equals("A")) {
         		//skip newly added
@@ -145,7 +141,7 @@ public class HumbleApp {
         	}
         	
         	//TODO: if rename action -> use old file name?
-        	File file = datastore.get(File.class, a.getFileId());
+        	File file = adapter.getFile(a.getFileId());
             logger.info("  "+a.getMode()+"  "+file.getPath());
 
             if (file.getPath().endsWith(".pdf")) {
@@ -163,11 +159,10 @@ public class HumbleApp {
             }
             
             //load hunks
-            List<Hunk> hunks = datastore.find(Hunk.class)
-            	.field("file_action_id").equal(a.getId()).asList();
+            List<Hunk> hunks = adapter.getHunks(a);
             
             //hunk interpolation (not saved)
-            interpolateHunks(hunks);
+            adapter.interpolateHunks(hunks);
 
             //get blame lines from git
             List<HunkBlameLine> blameLines = getBlameLines(hunks, parentRevision, file.getPath());
@@ -191,7 +186,7 @@ public class HumbleApp {
             	STORED_BLAMELINES++;
             }
             
-    		logProgess(a.getId(), "action");
+    		adapter.logProgess(a.getId(), "action");
         }
         
         logger.info("Analyzed commit: " + commit.getRevisionHash());
@@ -199,57 +194,13 @@ public class HumbleApp {
 		logger.info("  Compressed " + COMPRESSED_BLAMELINES + " blame lines.");
 		logger.info(("  Stored " + STORED_BLAMELINES + " blame lines."));
 
-		logProgess(commit.getId(), "commit");
-	}
-
-	private void resetProgess(ObjectId targetId) {
-		if (HumbleParameter.getInstance().isRecordProgress()) {
-			//TODO: instead of/in addition to deleting, set to "STARTED"?
-			//      - keep the object between start and end?
-			targetstore.delete(targetstore.find(PluginProgress.class)
-					.field("plugin").equal("humbleSHARK")
-					.field("project_id").equal(vcs.getProjectId())
-					.field("target_id").equal(targetId));
-		}
-	}
-	
-	private void logProgess(ObjectId targetId, String type) {
-		if (HumbleParameter.getInstance().isRecordProgress()) {
-			PluginProgress p = new PluginProgress();
-			p.setPlugin("humbleSHARK");
-			p.setTime(new Date());
-			p.setProjectId(vcs.getProjectId());
-			p.setTargetId(targetId);
-			p.setStatus("DONE");
-			p.setType(type);
-			targetstore.save(p);
-		}
-	}
-
-	private void interpolateHunks(List<Hunk> hunks) {
-        //-> double check off-by-one (0-based or 1-based)
-        //  -> [old|new]StartLine is 0-based when [old|new]Lines = 0
-        //     - hunk removed or added
-        //     - only affects the corresponding side [old|new]
-        //  -> [old|new]StartLine is 1-based when [old|new]Lines > 0
-        //     - hunk modified
-        //-> make sure it is consistent for old and new
-        //  -> interpolate as necessary
-
-		for (Hunk h : hunks) {
-			if (h.getOldLines()==0) {
-				h.setOldStart(h.getOldStart()+1);
-			}
-			if (h.getNewLines()==0) {
-				h.setNewStart(h.getNewStart()+1);
-			}
-		}
+		adapter.logProgess(commit.getId(), "commit");
 	}
 
 	private String getParentRevisionFromDB(String hash) {
         //look up in db
 		String parentRevision = null;
-		Commit commit = getCommit(hash);
+		Commit commit = adapter.getCommit(hash);
 		if (commit.getParents().size()==1) {
 			parentRevision = commit.getParents().get(0);
 		} else if (commit.getParents().size()>1) {
@@ -267,7 +218,7 @@ public class HumbleApp {
 	private String getParentRevisionFromDB(String hash, String path) {
         //look up in db
 		String parentRevision = null;
-		Commit commit = getCommit(hash);
+		Commit commit = adapter.getCommit(hash);
 		if (commit.getParents().size()==1) {
 			parentRevision = commit.getParents().get(0);
 		} else if (commit.getParents().size()>1) {
@@ -276,17 +227,16 @@ public class HumbleApp {
     		String parentHash = commit.getParents().get(0);
     		logger.info("    Evaluating parent actions for "+path+" at "+hash);
     		for (String p : commit.getParents()) {
-    			Commit parent = getCommit(p);
+    			Commit parent = adapter.getCommit(p);
     	        //load actions
-    	        List<FileAction> actions = datastore.find(FileAction.class)
-    	        	.field("commit_id").equal(parent.getId()).asList();
+    	        List<FileAction> actions = adapter.getActions(parent);
     	        for (FileAction a : actions) {
     	        	//check for special cases: mode A, R, etc.
     	        	if (a.getMode().equals("A")) {
     	        		//skip newly added
     	        		continue;
     	        	}
-    	            File file = datastore.get(File.class, a.getFileId());
+    	            File file = adapter.getFile(a.getFileId());
     	            if (file.getPath().equals(path)) {
     	            	parentHash = p;
     	            	//effectively last matched
@@ -354,7 +304,7 @@ public class HumbleApp {
 			
 			//need to take gapLines into account? -> no
 			RevCommit sourceCommit = blame.getSourceCommit(line-1);
-			Commit blamed = getCommit(sourceCommit.getName());
+			Commit blamed = adapter.getCommit(sourceCommit.getName());
 
 			HunkBlameLine hbl = new HunkBlameLine();
 			hbl.setHunkId(h.getId());
@@ -456,18 +406,4 @@ public class HumbleApp {
 		BlameResult blame = blamer.call();
 		return blame;
 	}
-	
-	Commit getCommit(String hash) {
-		if (!commitCache.containsKey(hash)) {
-			//load commit
-			Commit commit = datastore.find(Commit.class)
-				.field("vcs_system_id").equal(vcs.getId())
-				.field("revision_hash").equal(hash)
-				.project("code_entity_states", false)
-				.get();
-			commitCache.put(hash, commit);
-		}
-		return commitCache.get(hash);
-	}
-
 }

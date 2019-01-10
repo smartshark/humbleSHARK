@@ -17,7 +17,6 @@ public class HumbleParameter extends Parameter {
 	private boolean useActionBasedParent;
 	private boolean skipCompression;
 	private boolean skipSourcePaths;
-	private boolean recordProgress;
 
 
 	public static synchronized HumbleParameter getInstance() {
@@ -39,7 +38,6 @@ public class HumbleParameter extends Parameter {
 		useActionBasedParent = cmd.hasOption("ABP");
 		skipCompression = cmd.hasOption("SC");
 		skipSourcePaths = cmd.hasOption("SP");
-		recordProgress = cmd.hasOption("RP");
 	}
 	
 	@Override
@@ -85,11 +83,6 @@ public class HumbleParameter extends Parameter {
 	public boolean isSkipSourcePaths() {
 	    checkIfInitialised();
 		return skipSourcePaths;
-	}
-
-	public boolean isRecordProgress() {
-	    checkIfInitialised();
-		return recordProgress;
 	}
 
 }

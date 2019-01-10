@@ -63,11 +63,5 @@ public class HumbleOptionHandler extends OptionHandler {
 	    option.setArgs(0);
 	    options.addOption(option);
 
-		option = new Option("RP", "Record progress. Default: No");
-	    option.setRequired(false);
-	    option.setLongOpt("record_progress");
-	    option.setArgs(0);
-	    options.addOption(option);
-
 	}
 }
