@@ -63,5 +63,10 @@ public class HumbleOptionHandler extends OptionHandler {
 	    option.setArgs(0);
 	    options.addOption(option);
 
+		option = new Option("FC", "Follow copies. Default: No");
+	    option.setRequired(false);
+	    option.setLongOpt("follow_copies");
+	    option.setArgs(0);
+	    options.addOption(option);
 	}
 }

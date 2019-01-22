@@ -39,6 +39,9 @@ public class HumbleConfigurationHandler extends ConfigurationHandler {
 		if (properties.containsKey("skip_source_paths")) {
 			props.add("-SP");
 		}
+		if (properties.containsKey("follow_copies")) {
+			props.add("-FC");
+		}
 		return props;
 	}
 }
