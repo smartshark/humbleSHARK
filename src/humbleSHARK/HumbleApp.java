@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Logger;
 import common.ConfigurationHandler;
+import common.HunkSignatureHandler;
 import common.MongoAdapter;
 import common.humble.HumbleConfigurationHandler;
 import common.humble.HumbleParameter;
@@ -38,6 +40,7 @@ public class HumbleApp {
 	private HashMap<String, RevCommit> revisionCache = new HashMap<>();
 	protected VCSSystem vcs;
 	protected Repository repository;
+	private HunkSignatureHandler hsh = new HunkSignatureHandler();
 	protected static Logger logger = (Logger) LoggerFactory.getLogger(HumbleApp.class.getCanonicalName());
 
 	public static void main(String[] args) {
@@ -71,6 +74,9 @@ public class HumbleApp {
 		if (adapter.getVcs()==null) {
 			logger.error("No VCS information found for "+HumbleParameter.getInstance().getUrl());
 			System.exit(1);
+		}
+		if (HumbleParameter.getInstance().isFollowCopies()) {
+			adapter.constructFileActionMap();
 		}
 
 		try {
@@ -168,6 +174,11 @@ public class HumbleApp {
             List<HunkBlameLine> blameLines = getBlameLines(hunks, parentRevision, file.getPath());
             DETECTED_BLAMELINES+=blameLines.size();
 
+			//check for file copies
+    		if (HumbleParameter.getInstance().isFollowCopies()) {
+            	blameLines = trackAcrossCopies(a, blameLines);
+            }
+            
             //compress
             if (!HumbleParameter.getInstance().isSkipCompression()) {
             	blameLines = compressBlameLines(blameLines);
@@ -195,6 +206,94 @@ public class HumbleApp {
 		logger.info(("  Stored " + STORED_BLAMELINES + " blame lines."));
 
 		adapter.logProgess(commit.getId(), "commit");
+	}
+
+	private List<HunkBlameLine> trackAcrossCopies(FileAction a, List<HunkBlameLine> blameLines) {
+		//TODO: clean up, highly experimental
+		List<HunkBlameLine> trackedBlameLines = new ArrayList<>();
+		List<FileAction> allFileActions = adapter.getActionsFollowRenames(a.getFileId());
+		//TODO: this needs to be cached
+		//TODO: possibly recursive as well
+		for (HunkBlameLine hbl : blameLines) {
+			Commit blamedCommit = adapter.getCommit(hbl.getBlamedCommitId());
+			FileAction blamedAction = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst().get();
+			
+			List<Hunk> blamedHunks = adapter.getHunks(blamedAction);
+			//get hit lines
+			LinkedHashMap<Integer, Hunk> linesPost = new LinkedHashMap<>();
+			for (Hunk h : blamedHunks) {
+				for (int line = h.getNewStart(); line < h.getNewStart()+h.getNewLines(); line++) {
+					linesPost.put(line, h);
+				}
+			}
+			int line = 0;
+			String rCommit = "";
+			String extra = "";
+			if (!linesPost.containsKey(hbl.getSourceLine())) {
+				//not hit -> trace back
+		    	//TODO: cache?
+				String blamedHashParent = getParentRevisionFromDB(blamedCommit.getRevisionHash());
+				//TODO: check against -1
+				FileAction blamedParentAction = allFileActions.get(allFileActions.indexOf(blamedAction)-1);
+				String blamedParentPath = adapter.getFile(blamedParentAction.getFileId()).getPath();
+
+				//get offset
+				LinkedHashMap<Integer,Integer> hunksLineMap = hsh.getHunksLineMap(blamedHunks);
+				Integer d = hunksLineMap.keySet().stream()
+					.filter(l -> l <= hbl.getSourceLine())
+					.map(l -> hunksLineMap.get(l))
+					.reduce(0, Integer::sum);
+
+				try {
+					BlameResult blame = getBlameResult(blamedHashParent, blamedParentPath);
+					//check if blame exists (should be missing on first commits only)
+					if (blame != null) {
+						RevCommit sourceCommit = blame.getSourceCommit(hbl.getSourceLine()-1);
+						rCommit = sourceCommit.getName().substring(0, 4);
+						line = blame.getSourceLine(hbl.getSourceLine()-1+d)+1;
+						extra = rCommit+" "+(hbl.getSourceLine()-1+d)+"-1 "+line+"-1 ";
+						Commit blamed = adapter.getCommit(sourceCommit.getName());
+						
+						HunkBlameLine ohbl = new HunkBlameLine();
+						ohbl.setHunkId(hbl.getHunkId());
+						ohbl.setHunkLine(hbl.getHunkLine());
+						//getSourceLine is 0-based, so line-1
+						//returned line value is also 0-based, so +1
+						//need to take gapLines into account -> no
+						ohbl.setSourceLine(blame.getSourceLine(line+d)+1);
+						ohbl.setBlamedCommitId(blamed.getId());
+						if (!HumbleParameter.getInstance().isSkipSourcePaths()) {
+							ohbl.setSourcePath(blame.getSourcePath(line+d));
+						}
+						trackedBlameLines.add(ohbl);
+					}
+
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			} else {
+				//hit -> keep blame
+				trackedBlameLines.add(hbl);
+			}
+
+			System.out.println("    "
+					+hbl.getHunkLine()
+					+"-"
+					+hbl.getLineCount()
+					+"->"
+					+hbl.getSourceLine()
+					+"-"
+					+hbl.getLineCount()
+					+" "
+					+blamedCommit.getRevisionHash().substring(0, 4)
+					+" "
+					+linesPost.containsKey(hbl.getSourceLine())
+					+" "
+					+extra
+					+hbl.getSourcePath());
+		}
+		return trackedBlameLines;
 	}
 
 	private String getParentRevisionFromDB(String hash) {
