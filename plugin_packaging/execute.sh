@@ -27,6 +27,11 @@ if [ ! -z ${16+x} ] && [ ${16} != "None" ]; then
     COMMAND="$COMMAND --record_progress"
 fi
 
+if [ ! -z ${17+x} ] && [ ${17} != "None" ]; then
+    COMMAND="$COMMAND --follow_copies"
+fi
+
+
 if [ ! -z ${12+x} ] && [ ${12} != "None" ]; then
     COMMAND="$COMMAND --debug ${12}"
 fi

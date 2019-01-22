@@ -1,7 +1,7 @@
 {
     "name": "humbleSHARK",
     "author": "Philip Makedonski",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "plugin_type": "repo",
     "linux_libraries": [
         "git"
@@ -139,6 +139,13 @@
             "position": 16,
             "type": "execute",
             "description": "record progress in a separate collection"
+        },
+        {
+            "name": "follow_copies",
+            "required": false,
+            "position": 17,
+            "type": "execute",
+            "description": "follow copies"
         }
     ]
 }
