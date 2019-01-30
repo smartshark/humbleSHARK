@@ -68,5 +68,11 @@ public class HumbleOptionHandler extends OptionHandler {
 	    option.setLongOpt("follow_copies");
 	    option.setArgs(0);
 	    options.addOption(option);
+
+	    option = new Option("IR", "Ignore renames. Default: No");
+	    option.setRequired(false);
+	    option.setLongOpt("ignore_renames");
+	    option.setArgs(0);
+	    options.addOption(option);
 	}
 }

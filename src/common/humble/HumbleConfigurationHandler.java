@@ -42,6 +42,9 @@ public class HumbleConfigurationHandler extends ConfigurationHandler {
 		if (properties.containsKey("follow_copies")) {
 			props.add("-FC");
 		}
+		if (properties.containsKey("ignore_renames")) {
+			props.add("-IR");
+		}
 		return props;
 	}
 }

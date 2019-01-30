@@ -18,6 +18,7 @@ public class HumbleParameter extends Parameter {
 	private boolean skipCompression;
 	private boolean skipSourcePaths;
 	private boolean followCopies;
+	private boolean ignoreRenames;
 
 
 	public static synchronized HumbleParameter getInstance() {
@@ -40,6 +41,7 @@ public class HumbleParameter extends Parameter {
 		skipCompression = cmd.hasOption("SC");
 		skipSourcePaths = cmd.hasOption("SP");
 		followCopies = cmd.hasOption("FC");
+		ignoreRenames = cmd.hasOption("IR");
 	}
 	
 	@Override
@@ -90,6 +92,11 @@ public class HumbleParameter extends Parameter {
 	public boolean isFollowCopies() {
 	    checkIfInitialised();
 		return followCopies;
+	}
+
+	public boolean isIgnoreRenames() {
+	    checkIfInitialised();
+		return ignoreRenames;
 	}
 
 }

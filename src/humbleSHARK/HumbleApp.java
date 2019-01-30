@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.eclipse.jgit.api.BlameCommand;
@@ -203,7 +204,7 @@ public class HumbleApp {
         logger.info("Analyzed commit: " + commit.getRevisionHash());
 		logger.info("  Found " + DETECTED_BLAMELINES + " blame lines.");
 		logger.info("  Compressed " + COMPRESSED_BLAMELINES + " blame lines.");
-		logger.info(("  Stored " + STORED_BLAMELINES + " blame lines."));
+		logger.info("  Stored " + STORED_BLAMELINES + " blame lines.");
 
 		adapter.logProgess(commit.getId(), "commit");
 	}
@@ -216,6 +217,23 @@ public class HumbleApp {
 		//TODO: possibly recursive as well
 		for (HunkBlameLine hbl : blameLines) {
 			Commit blamedCommit = adapter.getCommit(hbl.getBlamedCommitId());
+			//TODO: blames are sometimes incorrectly assigned
+			Optional<FileAction> optional = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst();
+			if (!optional.isPresent()) {
+				System.out.println("  ERROR: "+hbl.getHunkLine()+" "+hbl.getSourcePath()
+						+"\n    "+blamedCommit.getRevisionHash() 
+						+"\n    "+blamedCommit.getAuthorDate());
+				for (FileAction x : allFileActions) {
+					Commit ax = adapter.getCommit(x.getCommitId());
+					File fx = adapter.getFile(x.getFileId());
+					System.out.println(""
+							+"      "+ax.getRevisionHash() 
+							+" "+ax.getAuthorDate()
+							+" "+fx.getPath()
+							);
+				}
+			}
+			
 			FileAction blamedAction = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst().get();
 			
 			List<Hunk> blamedHunks = adapter.getHunks(blamedAction);
@@ -248,8 +266,9 @@ public class HumbleApp {
 					BlameResult blame = getBlameResult(blamedHashParent, blamedParentPath);
 					//check if blame exists (should be missing on first commits only)
 					if (blame != null) {
-						RevCommit sourceCommit = blame.getSourceCommit(hbl.getSourceLine()-1);
+						RevCommit sourceCommit = blame.getSourceCommit(hbl.getSourceLine()-1+d);
 						rCommit = sourceCommit.getName().substring(0, 4);
+						//TODO: fix index
 						line = blame.getSourceLine(hbl.getSourceLine()-1+d)+1;
 						extra = rCommit+" "+(hbl.getSourceLine()-1+d)+"-1 "+line+"-1 ";
 						Commit blamed = adapter.getCommit(sourceCommit.getName());
@@ -260,6 +279,7 @@ public class HumbleApp {
 						//getSourceLine is 0-based, so line-1
 						//returned line value is also 0-based, so +1
 						//need to take gapLines into account -> no
+						//TODO: fix index
 						ohbl.setSourceLine(blame.getSourceLine(line+d)+1);
 						ohbl.setBlamedCommitId(blamed.getId());
 						if (!HumbleParameter.getInstance().isSkipSourcePaths()) {
@@ -501,7 +521,8 @@ public class HumbleApp {
 		BlameCommand blamer = new BlameCommand(repository);
 		blamer.setStartCommit(getRevision(hash));
 		blamer.setFilePath(path);
-		blamer.setFollowFileRenames(true);
+		//TODO: check differences in outcomes, as the setting may be unreliable in some cases
+		blamer.setFollowFileRenames(!HumbleParameter.getInstance().isIgnoreRenames());
 		BlameResult blame = blamer.call();
 		return blame;
 	}
