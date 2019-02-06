@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.bson.types.ObjectId;
 import org.eclipse.jgit.api.BlameCommand;
 import org.eclipse.jgit.blame.BlameResult;
 import org.eclipse.jgit.lib.Repository;
@@ -41,7 +42,7 @@ public class HumbleApp {
 	private HashMap<String, RevCommit> revisionCache = new HashMap<>();
 	protected VCSSystem vcs;
 	protected Repository repository;
-	private HunkSignatureHandler hsh = new HunkSignatureHandler();
+	protected HunkSignatureHandler hsh = new HunkSignatureHandler();
 	protected static Logger logger = (Logger) LoggerFactory.getLogger(HumbleApp.class.getCanonicalName());
 
 	public static void main(String[] args) {
@@ -71,6 +72,10 @@ public class HumbleApp {
 		adapter.setPluginName("humbleSHARK");
 		adapter.setRecordProgress(HumbleParameter.getInstance().isRecordProgress());
 		targetstore = adapter.getTargetstore();
+		if (HumbleParameter.getInstance().isSeparateDatabase()) {
+			String name = HumbleParameter.getInstance().getUrl().substring(HumbleParameter.getInstance().getUrl().lastIndexOf("/"));
+			targetstore = adapter.getTargetstore("localhost", 27017, "humbleSHARK-"+name);
+		}
 		adapter.setVcs(HumbleParameter.getInstance().getUrl());
 		if (adapter.getVcs()==null) {
 			logger.error("No VCS information found for "+HumbleParameter.getInstance().getUrl());
@@ -110,9 +115,6 @@ public class HumbleApp {
 	
 	public void processCommit(Commit commit) {
 		adapter.resetProgess(commit.getId());
-        int DETECTED_BLAMELINES = 0;
-        int COMPRESSED_BLAMELINES = 0;
-        int STORED_BLAMELINES = 0;
 
         //deal with merges
         //  -> skip altogether?
@@ -149,174 +151,181 @@ public class HumbleApp {
         	
         	//TODO: if rename action -> use old file name?
         	File file = adapter.getFile(a.getFileId());
-            logger.info("  "+a.getMode()+"  "+file.getPath());
 
             if (file.getPath().endsWith(".pdf")) {
             	//skip pdfs for which blame information is incomplete
             	continue;
             }
-            
-            //load previous action?
-            //try more accurate parent resolution
-            //-> may require graph reconstruction
-            //-> may be a good idea to store (not the same as parent)
-            //  -> can parent work still?
-            if (HumbleParameter.getInstance().isUseActionBasedParent()) {
-            	parentRevision = getParentRevisionFromDB(commit.getRevisionHash(), file.getPath());
-            }
-            
-            //load hunks
-            List<Hunk> hunks = adapter.getHunks(a);
-            
-            //hunk interpolation (not saved)
-            adapter.interpolateHunks(hunks);
 
-            //get blame lines from git
-            List<HunkBlameLine> blameLines = getBlameLines(hunks, parentRevision, file.getPath());
-            DETECTED_BLAMELINES+=blameLines.size();
-
-			//check for file copies
-    		if (HumbleParameter.getInstance().isFollowCopies()) {
-            	blameLines = trackAcrossCopies(a, blameLines);
-            }
-            
-            //compress
-            if (!HumbleParameter.getInstance().isSkipCompression()) {
-            	blameLines = compressBlameLines(blameLines);
-            	COMPRESSED_BLAMELINES+=blameLines.size();
-            }
-            
-            //clear existing records
-            for (Hunk h : hunks) {
-            	targetstore.delete(targetstore.find(HunkBlameLine.class)
-            		.field("hunk_id").equal(h.getId()));
-            }
-            
-            //store blame lines
-            for (HunkBlameLine hbl : blameLines) {
-            	targetstore.save(hbl);
-            	STORED_BLAMELINES++;
-            }
+            processFileAction(a, parentRevision);
             
     		adapter.logProgess(a.getId(), "action");
         }
         
         logger.info("Analyzed commit: " + commit.getRevisionHash());
-		logger.info("  Found " + DETECTED_BLAMELINES + " blame lines.");
-		logger.info("  Compressed " + COMPRESSED_BLAMELINES + " blame lines.");
-		logger.info("  Stored " + STORED_BLAMELINES + " blame lines.");
 
 		adapter.logProgess(commit.getId(), "commit");
 	}
 
-	private List<HunkBlameLine> trackAcrossCopies(FileAction a, List<HunkBlameLine> blameLines) {
-		//TODO: clean up, highly experimental
+	public void processFileAction(FileAction a) {
+		Commit commit = adapter.getCommit(a.getCommitId());
+        String parentRevision = getParentRevisionFromDB(commit.getRevisionHash());
+        if (parentRevision == null) {
+        	return;
+        }
+        processFileAction(a, parentRevision);
+	}
+	
+	public void processFileAction(FileAction a, String parentRevision) {
+    	File file = adapter.getFile(a.getFileId());
+    	Commit commit = adapter.getCommit(a.getCommitId());
+
+    	logger.info("  "+a.getMode()+"  "+file.getPath());
+
+    	//load hunks
+        List<Hunk> hunks = adapter.getHunks(a);
+        
+        //hunk interpolation (not saved)
+        adapter.interpolateHunks(hunks);
+
+        //load previous action?
+        //try more accurate parent resolution
+        //-> may require graph reconstruction
+        //-> may be a good idea to store (not the same as parent)
+        //  -> can parent work still?
+        if (HumbleParameter.getInstance().isUseActionBasedParent()) {
+        	parentRevision = getParentRevisionFromDB(commit.getRevisionHash(), file.getPath());
+        }
+        
+        //get blame lines from git
+        String path = file.getPath();
+        //handle renames and copies
+        if (a.getMode().equals("R") || a.getMode().equals("C")) {
+        	File oldFile = adapter.getFile(a.getOldFileId());
+        	path = oldFile.getPath();
+        }
+        
+		List<HunkBlameLine> blameLines = getBlameLines(hunks, parentRevision, path);
+
+		//check for file copies
+		if (HumbleParameter.getInstance().isFollowCopies()) {
+        	blameLines = trackAcrossCopies(a, blameLines);
+        }
+        
+        //compress
+        if (!HumbleParameter.getInstance().isSkipCompression()) {
+        	blameLines = compressBlameLines(blameLines);
+        }
+        
+        //clear existing records
+        for (Hunk h : hunks) {
+        	targetstore.delete(targetstore.find(HunkBlameLine.class)
+        		.field("hunk_id").equal(h.getId()));
+        }
+        
+        //store blame lines
+        for (HunkBlameLine hbl : blameLines) {
+        	targetstore.save(hbl);
+        }
+	}
+
+	List<HunkBlameLine> trackAcrossCopies(FileAction a, List<HunkBlameLine> blameLines) {
 		List<HunkBlameLine> trackedBlameLines = new ArrayList<>();
+		
 		List<FileAction> allFileActions = adapter.getActionsFollowRenames(a.getFileId());
-		//TODO: this needs to be cached
-		//TODO: possibly recursive as well
+
 		for (HunkBlameLine hbl : blameLines) {
-			Commit blamedCommit = adapter.getCommit(hbl.getBlamedCommitId());
-			//TODO: blames are sometimes incorrectly assigned
-			Optional<FileAction> optional = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst();
-			if (!optional.isPresent()) {
-				System.out.println("  ERROR: "+hbl.getHunkLine()+" "+hbl.getSourcePath()
-						+"\n    "+blamedCommit.getRevisionHash() 
-						+"\n    "+blamedCommit.getAuthorDate());
-				for (FileAction x : allFileActions) {
-					Commit ax = adapter.getCommit(x.getCommitId());
-					File fx = adapter.getFile(x.getFileId());
-					System.out.println(""
-							+"      "+ax.getRevisionHash() 
-							+" "+ax.getAuthorDate()
-							+" "+fx.getPath()
-							);
-				}
+			HunkBlameLine realhbl = trackAcrossCopies(hbl, allFileActions);
+			if (realhbl != null) {
+				trackedBlameLines.add(realhbl);
 			}
-			
-			FileAction blamedAction = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst().get();
-			
-			List<Hunk> blamedHunks = adapter.getHunks(blamedAction);
-			//get hit lines
-			LinkedHashMap<Integer, Hunk> linesPost = new LinkedHashMap<>();
-			for (Hunk h : blamedHunks) {
-				for (int line = h.getNewStart(); line < h.getNewStart()+h.getNewLines(); line++) {
-					linesPost.put(line, h);
-				}
-			}
-			int line = 0;
-			String rCommit = "";
-			String extra = "";
-			if (!linesPost.containsKey(hbl.getSourceLine())) {
-				//not hit -> trace back
-		    	//TODO: cache?
-				String blamedHashParent = getParentRevisionFromDB(blamedCommit.getRevisionHash());
-				//TODO: check against -1
-				FileAction blamedParentAction = allFileActions.get(allFileActions.indexOf(blamedAction)-1);
-				String blamedParentPath = adapter.getFile(blamedParentAction.getFileId()).getPath();
-
-				//get offset
-				LinkedHashMap<Integer,Integer> hunksLineMap = hsh.getHunksLineMap(blamedHunks);
-				Integer d = hunksLineMap.keySet().stream()
-					.filter(l -> l <= hbl.getSourceLine())
-					.map(l -> hunksLineMap.get(l))
-					.reduce(0, Integer::sum);
-
-				try {
-					BlameResult blame = getBlameResult(blamedHashParent, blamedParentPath);
-					//check if blame exists (should be missing on first commits only)
-					if (blame != null) {
-						RevCommit sourceCommit = blame.getSourceCommit(hbl.getSourceLine()-1+d);
-						rCommit = sourceCommit.getName().substring(0, 4);
-						//TODO: fix index
-						line = blame.getSourceLine(hbl.getSourceLine()-1+d)+1;
-						extra = rCommit+" "+(hbl.getSourceLine()-1+d)+"-1 "+line+"-1 ";
-						Commit blamed = adapter.getCommit(sourceCommit.getName());
-						
-						HunkBlameLine ohbl = new HunkBlameLine();
-						ohbl.setHunkId(hbl.getHunkId());
-						ohbl.setHunkLine(hbl.getHunkLine());
-						//getSourceLine is 0-based, so line-1
-						//returned line value is also 0-based, so +1
-						//need to take gapLines into account -> no
-						//TODO: fix index
-						ohbl.setSourceLine(blame.getSourceLine(line+d)+1);
-						ohbl.setBlamedCommitId(blamed.getId());
-						if (!HumbleParameter.getInstance().isSkipSourcePaths()) {
-							ohbl.setSourcePath(blame.getSourcePath(line+d));
-						}
-						trackedBlameLines.add(ohbl);
-					}
-
-				} catch (Exception e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			} else {
-				//hit -> keep blame
-				trackedBlameLines.add(hbl);
-			}
-
-			System.out.println("    "
-					+hbl.getHunkLine()
-					+"-"
-					+hbl.getLineCount()
-					+"->"
-					+hbl.getSourceLine()
-					+"-"
-					+hbl.getLineCount()
-					+" "
-					+blamedCommit.getRevisionHash().substring(0, 4)
-					+" "
-					+linesPost.containsKey(hbl.getSourceLine())
-					+" "
-					+extra
-					+hbl.getSourcePath());
 		}
+		
 		return trackedBlameLines;
 	}
 
-	private String getParentRevisionFromDB(String hash) {
+	HunkBlameLine trackAcrossCopies(HunkBlameLine hbl, List<FileAction> allFileActions) {
+		Commit blamedCommit = adapter.getCommit(hbl.getBlamedCommitId());
+		Optional<FileAction> optional = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst();
+		if (!optional.isPresent()) {
+			//blames are sometimes incorrectly assigned
+			logger.warn("Blamed commit cannot be resolved:"
+			+" "+hbl.getHunkLine()
+			+" "+hbl.getSourcePath()
+			+" "+blamedCommit.getRevisionHash() 
+			+" "+blamedCommit.getAuthorDate());
+		} else {
+			FileAction blamedAction = optional.get();
+			
+			//if copy or rename
+			//TODO: check if required for renames..
+			if (blamedAction.getMode().equals("C") || blamedAction.getMode().equals("R")) {
+				
+				List<Hunk> blamedActionHunks = adapter.getHunks(blamedAction);
+				//get hit lines
+				LinkedHashMap<Integer, Hunk> linesPostMap = getLinesPostMap(blamedActionHunks);
+				if (!linesPostMap.containsKey(hbl.getSourceLine())) {
+					//not hit -> trace back
+					
+					//TODO: cache?
+					FileAction blamedActionParent = allFileActions.get(allFileActions.indexOf(blamedAction)-1);
+					Commit blamedActionParentCommit = adapter.getCommit(blamedActionParent.getCommitId());
+					String blamedActionParentPath = adapter.getFile(blamedActionParent.getFileId()).getPath();
+					
+					//get offset
+					LinkedHashMap<Integer,Integer> hunksLineMap = hsh.getHunksLineMap(blamedActionHunks);
+					Integer d = hunksLineMap.keySet().stream()
+							.filter(l -> l <= hbl.getSourceLine())
+							.map(l -> hunksLineMap.get(l))
+							.reduce(0, Integer::sum);
+					
+					try {
+						//get blame for parent
+						BlameResult blamedActionParentBlame = getBlameResult(blamedActionParentCommit.getRevisionHash(), blamedActionParentPath);
+						
+						//check if blame exists (should be missing on first commits only)
+						if (blamedActionParentBlame != null) {
+							int blamedActionParentLine = hbl.getSourceLine()+d;
+							
+							HunkBlameLine realhbl = getBlameLine(blamedActionParentBlame, blamedActionParentLine, hbl.getHunkId());
+							//override with the original hunk line
+							realhbl.setHunkLine(hbl.getHunkLine());
+							//recursive check
+							realhbl = trackAcrossCopies(realhbl, allFileActions);
+							return realhbl;
+						}
+					} catch (Exception e) {
+						logger.warn(e.getMessage());
+						e.printStackTrace();
+						if (e.getMessage()==null) {
+							e.printStackTrace();
+						}
+					}
+					
+				} else {
+					//hit -> keep blame line
+					return hbl;
+				}
+				
+			} else {
+				//not a copy / rename, keep blame line
+				return hbl;
+			}
+		}
+		return null;
+	}
+
+	private LinkedHashMap<Integer, Hunk> getLinesPostMap(List<Hunk> blamedHunks) {
+		LinkedHashMap<Integer, Hunk> linesPost = new LinkedHashMap<>();
+		for (Hunk h : blamedHunks) {
+			for (int line = h.getNewStart(); line < h.getNewStart()+h.getNewLines(); line++) {
+				linesPost.put(line, h);
+			}
+		}
+		return linesPost;
+	}
+	
+	String getParentRevisionFromDB(String hash) {
         //look up in db
 		String parentRevision = null;
 		Commit commit = adapter.getCommit(hash);
@@ -334,7 +343,7 @@ public class HumbleApp {
 		return parentRevision;
 	}
 	
-	private String getParentRevisionFromDB(String hash, String path) {
+	String getParentRevisionFromDB(String hash, String path) {
         //look up in db
 		String parentRevision = null;
 		Commit commit = adapter.getCommit(hash);
@@ -422,23 +431,28 @@ public class HumbleApp {
 			}
 			
 			//need to take gapLines into account? -> no
-			RevCommit sourceCommit = blame.getSourceCommit(line-1);
-			Commit blamed = adapter.getCommit(sourceCommit.getName());
-
-			HunkBlameLine hbl = new HunkBlameLine();
-			hbl.setHunkId(h.getId());
-			hbl.setHunkLine(line);
-			//getSourceLine is 0-based, so line-1
-			//returned line value is also 0-based, so +1
-			//need to take gapLines into account -> no
-			hbl.setSourceLine(blame.getSourceLine(line-1)+1);
-			hbl.setBlamedCommitId(blamed.getId());
-			if (!HumbleParameter.getInstance().isSkipSourcePaths()) {
-				hbl.setSourcePath(blame.getSourcePath(line-1));
-			}
+			HunkBlameLine hbl = getBlameLine(blame, line, h.getId());
 			blameLines.add(hbl);
 		}
 		return blameLines;
+	}
+
+	HunkBlameLine getBlameLine(BlameResult blame, int line, ObjectId hunkId) {
+		RevCommit sourceCommit = blame.getSourceCommit(line-1);
+		Commit blamed = adapter.getCommit(sourceCommit.getName());
+		
+		HunkBlameLine hbl = new HunkBlameLine();
+		hbl.setHunkId(hunkId);
+		hbl.setHunkLine(line);
+		//getSourceLine is 0-based, so line-1
+		//returned line value is also 0-based, so +1
+		//need to take gapLines into account -> no
+		hbl.setSourceLine(blame.getSourceLine(line-1)+1);
+		hbl.setBlamedCommitId(blamed.getId());
+		if (!HumbleParameter.getInstance().isSkipSourcePaths()) {
+			hbl.setSourcePath(blame.getSourcePath(line-1));
+		}
+		return hbl;
 	}
 
 	List<String> getOldGappedLines(Hunk h) {
