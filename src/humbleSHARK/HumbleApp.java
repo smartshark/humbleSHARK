@@ -73,7 +73,7 @@ public class HumbleApp {
 		adapter.setRecordProgress(HumbleParameter.getInstance().isRecordProgress());
 		targetstore = adapter.getTargetstore();
 		if (HumbleParameter.getInstance().isSeparateDatabase()) {
-			String name = HumbleParameter.getInstance().getUrl().substring(HumbleParameter.getInstance().getUrl().lastIndexOf("/"));
+			String name = HumbleParameter.getInstance().getUrl().substring(HumbleParameter.getInstance().getUrl().lastIndexOf("/")).replaceAll("\\.git", "");
 			targetstore = adapter.getTargetstore("localhost", 27017, "humbleSHARK-"+name);
 		}
 		adapter.setVcs(HumbleParameter.getInstance().getUrl());
