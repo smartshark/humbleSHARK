@@ -45,14 +45,8 @@ public class HumbleApp {
 	protected HunkSignatureHandler hsh = new HunkSignatureHandler();
 	protected static Logger logger = (Logger) LoggerFactory.getLogger(HumbleApp.class.getCanonicalName());
 
-	public static void main(String[] args) {
-		//load configuration -> override parameters
-		if (args.length == 1) {
-			args = HumbleConfigurationHandler.getInstance().loadConfiguration(args[0]);
-		}
-		
+	public static void main(String[] args) {		
 		HumbleParameter.getInstance().init(args);
-		ConfigurationHandler.getInstance().setLogLevel(HumbleParameter.getInstance().getDebugLevel());
 		
 		HumbleApp app = new HumbleApp();
 		

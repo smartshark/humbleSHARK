@@ -25,6 +25,7 @@ public class HumbleParameter extends Parameter {
 		if (instance == null) {
 			instance = new HumbleParameter();
 		    instance.setOptionsHandler(new HumbleOptionHandler());
+		    instance.setConfigurationHandler(new HumbleConfigurationHandler());
 		    instance.setToolname("humbleSHARK");
 		}
 		return instance;
