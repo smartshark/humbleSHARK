@@ -100,7 +100,7 @@ public class HumbleApp {
 		int size = commits.size();
 		for (Commit commit : commits) {
 			i++;
-			logger.info("Processing: "+i+"/"+size);
+			logger.info("Processing: "+i+"/"+size+" "+commit.getRevisionHash());
 			processCommit(commit);
 		}
 	}
