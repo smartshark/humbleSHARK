@@ -262,6 +262,7 @@ public class HumbleApp {
 			if (blamedAction.getMode().equals("C") || blamedAction.getMode().equals("R")) {
 				
 				List<Hunk> blamedActionHunks = adapter.getHunks(blamedAction);
+				adapter.interpolateHunks(blamedActionHunks);
 				//get hit lines
 				LinkedHashMap<Integer, Hunk> linesPostMap = getLinesPostMap(blamedActionHunks);
 				if (!linesPostMap.containsKey(hbl.getSourceLine())) {
@@ -274,19 +275,19 @@ public class HumbleApp {
 					
 					//get offset
 					LinkedHashMap<Integer,Integer> hunksLineMap = hsh.getHunksLineMap(blamedActionHunks);
+					
 					Integer d = hunksLineMap.keySet().stream()
 							.filter(l -> l <= hbl.getSourceLine())
 							.map(l -> hunksLineMap.get(l))
-							.reduce(0, Integer::sum);
-					
+							.reduce((f, s) -> s).orElse(0);
+
 					try {
 						//get blame for parent
 						BlameResult blamedActionParentBlame = getBlameResult(blamedActionParentCommit.getRevisionHash(), blamedActionParentPath);
 						
 						//check if blame exists (should be missing on first commits only)
 						if (blamedActionParentBlame != null) {
-							int blamedActionParentLine = hbl.getSourceLine()+d;
-							
+							int blamedActionParentLine = hbl.getSourceLine()-d;
 							HunkBlameLine realhbl = getBlameLine(blamedActionParentBlame, blamedActionParentLine, hbl.getHunkId());
 							//override with the original hunk line
 							realhbl.setHunkLine(hbl.getHunkLine());
