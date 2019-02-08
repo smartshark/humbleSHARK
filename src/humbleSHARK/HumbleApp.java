@@ -20,10 +20,8 @@ import org.mongodb.morphia.Datastore;
 import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Logger;
-import common.ConfigurationHandler;
 import common.HunkSignatureHandler;
 import common.MongoAdapter;
-import common.humble.HumbleConfigurationHandler;
 import common.humble.HumbleParameter;
 import de.ugoe.cs.smartshark.model.Commit;
 import de.ugoe.cs.smartshark.model.File;
