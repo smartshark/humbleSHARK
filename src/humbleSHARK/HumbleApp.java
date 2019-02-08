@@ -1,6 +1,8 @@
 package humbleSHARK;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -66,6 +68,7 @@ public class HumbleApp {
 		targetstore = adapter.getTargetstore();
 		if (HumbleParameter.getInstance().isSeparateDatabase()) {
 			String name = HumbleParameter.getInstance().getUrl().substring(HumbleParameter.getInstance().getUrl().lastIndexOf("/")+1).replaceAll("\\.git", "");
+			name+="-"+LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
 			targetstore = adapter.getTargetstore("localhost", 27017, "humbleSHARK-"+name);
 		}
 		adapter.setVcs(HumbleParameter.getInstance().getUrl());
