@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.stream.Collectors;
 
 import org.bson.types.ObjectId;
 import org.eclipse.jgit.api.BlameCommand;
+import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.blame.BlameResult;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
@@ -76,16 +78,18 @@ public class HumbleApp {
 			logger.error("No VCS information found for "+HumbleParameter.getInstance().getUrl());
 			System.exit(1);
 		}
-		if (HumbleParameter.getInstance().isFollowCopies()) {
-			adapter.constructFileActionMap();
-		}
 
 		try {
 			repository = FileRepositoryBuilder.create(
 				new java.io.File(HumbleParameter.getInstance().getRepoPath()+"/.git"));
+			adapter.setRevisionHashes(getOrderedRevisionHashes());
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(1);
+		}
+
+		if (HumbleParameter.getInstance().isFollowCopies()) {
+			adapter.constructFileActionMap();
 		}
 	}
 
@@ -535,5 +539,20 @@ public class HumbleApp {
 		blamer.setFollowFileRenames(!HumbleParameter.getInstance().isIgnoreRenames());
 		BlameResult blame = blamer.call();
 		return blame;
+	}
+
+	List<String> getOrderedRevisionHashes() {
+		List<String> revisionHashes = new ArrayList<String>();
+		try (Git git = new Git(repository)) {
+            Iterable<RevCommit> revs = git.log().all().call();
+            for (RevCommit rev : revs) {
+            	revisionHashes.add(rev.getName());
+            }
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		Collections.reverse(revisionHashes);
+		return revisionHashes;
 	}
 }
