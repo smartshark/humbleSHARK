@@ -248,7 +248,7 @@ public class HumbleApp {
 		Optional<FileAction> optional = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst();
 		if (!optional.isPresent()) {
 			//blames are sometimes incorrectly assigned
-			logger.warn("Blamed commit cannot be resolved:"
+			logger.warn("Corresponding action in blamed commit cannot be resolved:"
 			+" "+hbl.getHunkLine()
 			+" "+hbl.getSourcePath()
 			+" "+blamedCommit.getRevisionHash() 
@@ -267,39 +267,49 @@ public class HumbleApp {
 				if (!linesPostMap.containsKey(hbl.getSourceLine())) {
 					//not hit -> trace back
 					
-					//TODO: cache?
-					FileAction blamedActionParent = allFileActions.get(allFileActions.indexOf(blamedAction)-1);
-					Commit blamedActionParentCommit = adapter.getCommit(blamedActionParent.getCommitId());
-					String blamedActionParentPath = adapter.getFile(blamedActionParent.getFileId()).getPath();
-					
-					//get offset
-					LinkedHashMap<Integer,Integer> hunksLineMap = hsh.getHunksLineMap(blamedActionHunks);
-					
-					Integer d = hunksLineMap.keySet().stream()
-							.filter(l -> l <= hbl.getSourceLine())
-							.map(l -> hunksLineMap.get(l))
-							.reduce((f, s) -> s).orElse(0);
-
-					try {
-						//get blame for parent
-						BlameResult blamedActionParentBlame = getBlameResult(blamedActionParentCommit.getRevisionHash(), blamedActionParentPath);
+					if (allFileActions.indexOf(blamedAction) > 0) {
+						//TODO: cache?
+						FileAction blamedActionParent = allFileActions.get(allFileActions.indexOf(blamedAction)-1);
+						Commit blamedActionParentCommit = adapter.getCommit(blamedActionParent.getCommitId());
+						String blamedActionParentPath = adapter.getFile(blamedActionParent.getFileId()).getPath();
 						
-						//check if blame exists (should be missing on first commits only)
-						if (blamedActionParentBlame != null) {
-							int blamedActionParentLine = hbl.getSourceLine()-d;
-							HunkBlameLine realhbl = getBlameLine(blamedActionParentBlame, blamedActionParentLine, hbl.getHunkId());
-							//override with the original hunk line
-							realhbl.setHunkLine(hbl.getHunkLine());
-							//recursive check
-							realhbl = trackAcrossCopies(realhbl, allFileActions);
-							return realhbl;
-						}
-					} catch (Exception e) {
-						logger.warn(e.getMessage());
-						e.printStackTrace();
-						if (e.getMessage()==null) {
+						//get offset
+						LinkedHashMap<Integer,Integer> hunksLineMap = hsh.getHunksLineMap(blamedActionHunks);
+						
+						Integer d = hunksLineMap.keySet().stream()
+								.filter(l -> l <= hbl.getSourceLine())
+								.map(l -> hunksLineMap.get(l))
+								.reduce((f, s) -> s).orElse(0);
+	
+						try {
+							//get blame for parent
+							BlameResult blamedActionParentBlame = getBlameResult(blamedActionParentCommit.getRevisionHash(), blamedActionParentPath);
+							
+							//check if blame exists (should be missing on first commits only)
+							if (blamedActionParentBlame != null) {
+								int blamedActionParentLine = hbl.getSourceLine()-d;
+								HunkBlameLine realhbl = getBlameLine(blamedActionParentBlame, blamedActionParentLine, hbl.getHunkId());
+								//override with the original hunk line
+								realhbl.setHunkLine(hbl.getHunkLine());
+								//recursive check
+								realhbl = trackAcrossCopies(realhbl, allFileActions);
+								return realhbl;
+							}
+						} catch (Exception e) {
+							logger.warn(e.getMessage());
 							e.printStackTrace();
+							if (e.getMessage()==null) {
+								e.printStackTrace();
+							}
 						}
+					} else {
+						//TODO: investigate why this is the case - the blamed action is the first know action
+						File blamedFile = adapter.getFile(blamedAction.getFileId());
+						logger.warn("FIX: Blamed action is first action:"
+								+" "+blamedAction.getMode() 
+								+" "+blamedCommit.getRevisionHash()
+								+" "+blamedFile.getPath());
+						return hbl;
 					}
 					
 				} else {
@@ -526,7 +536,10 @@ public class HumbleApp {
 				RevCommit commit = walk.parseCommit(repository.resolve(hash));
 				walk.close();
 				revisionCache.put(hash, commit);
-			} 
+			} catch (Exception e) {
+				logger.warn("Revision "+hash+ " could not be found in the git repository");
+				logger.warn("  "+e.getMessage());
+			}
 		}
 		return revisionCache.get(hash);
     }
