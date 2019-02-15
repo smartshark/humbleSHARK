@@ -123,7 +123,7 @@ public class HumbleApp {
         // 	   actions for the files from the merge commit took place
         //     may need multiple hops in case of multiple merges
 
-        if (!HumbleParameter.getInstance().isProcessMerges() && commit.getParents() == null && commit.getParents().size()!=1) {
+        if (commit.getParents() == null || (!HumbleParameter.getInstance().isProcessMerges() && commit.getParents().size()!=1)) {
         	return;
         }
         
