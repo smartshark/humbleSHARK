@@ -298,12 +298,27 @@ public class HumbleApp {
 							
 							//check if blame exists (should be missing on first commits only)
 							if (blamedActionParentBlame != null) {
-								HunkBlameLine realhbl = getBlameLine(blamedActionParentBlame, blamedActionParentLine, hbl.getHunkId());
-								//override with the original hunk line
-								realhbl.setHunkLine(hbl.getHunkLine());
-								//recursive check
-								realhbl = trackAcrossCopies(realhbl, allFileActions);
-								return realhbl;
+								//check for anomalies in the target parent line
+								if (blamedActionParentLine-1 > blamedActionParentBlame.getResultContents().size()) {
+									logger.warn("FIX: " 
+											+" "+blamedAction.getMode() 
+											+" "+blamedCommit.getRevisionHash().substring(0,8)
+											+" --parent--> "+blamedCommitParent.substring(0,8)
+											+" "+blamedActionParentPath
+											+" Line: "+hbl.getSourceLine()
+											+" Difference: "+d
+											+" Blame size: "+blamedActionParentBlame.getResultContents().size()
+											);
+									return hbl;
+								} else {
+									HunkBlameLine realhbl = getBlameLine(blamedActionParentBlame, blamedActionParentLine, hbl.getHunkId());
+									//override with the original hunk line
+									realhbl.setHunkLine(hbl.getHunkLine());
+									//recursive check
+									realhbl = trackAcrossCopies(realhbl, allFileActions);
+									return realhbl;
+								}
+								
 							} else {
 								logger.warn("FIX: Blame result for parent could not be calculated"
 										+" "+blamedAction.getMode() 
