@@ -253,10 +253,13 @@ public class HumbleApp {
 		if (!optional.isPresent()) {
 			//blames are sometimes incorrectly assigned
 			logger.warn("Corresponding action in blamed commit cannot be resolved:"
+			+" "+blamedCommit.getRevisionHash().substring(0, 8) 
+			+" parents="+blamedCommit.getParents().size() 
+			+" "+blamedCommit.getAuthorDate()
 			+" "+hbl.getHunkLine()
-			+" "+hbl.getSourcePath()
-			+" "+blamedCommit.getRevisionHash() 
-			+" "+blamedCommit.getAuthorDate());
+			+"->"+hbl.getSourceLine()
+			+" in "+hbl.getSourcePath()
+			);
 		} else {
 			FileAction blamedAction = optional.get();
 			
