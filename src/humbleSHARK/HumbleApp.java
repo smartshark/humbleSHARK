@@ -262,7 +262,6 @@ public class HumbleApp {
 			+" in "+hbl.getSourcePath()
 			);
 			//fallback
-			return hbl;
 		} else {
 			FileAction blamedAction = optional.get();
 			
@@ -311,7 +310,6 @@ public class HumbleApp {
 										+" "+blamedCommit.getRevisionHash().substring(0,8)
 										+" --parent--> "+blamedCommitParent.substring(0,8)
 										+" "+blamedActionParentPath);
-								return hbl;
 							}
 						} catch (Exception e) {
 							logger.warn("FIX: "+e.getMessage());
@@ -326,9 +324,6 @@ public class HumbleApp {
 									);
 							
 							e.printStackTrace();
-							if (e.getMessage()==null) {
-								e.printStackTrace();
-							}
 						}
 					} else {
 						//TODO: investigate why this is the case - the blamed action is the first know action
@@ -337,20 +332,17 @@ public class HumbleApp {
 								+" "+blamedAction.getMode() 
 								+" "+blamedCommit.getRevisionHash()
 								+" "+blamedFile.getPath());
-						return hbl;
 					}
 					
 				} else {
 					//hit -> keep blame line
-					return hbl;
 				}
 				
 			} else {
 				//not a copy / rename, keep blame line
-				return hbl;
 			}
 		}
-		return null;
+		return hbl;
 	}
 
 	private LinkedHashMap<Integer, Hunk> getLinesPostMap(List<Hunk> blamedHunks) {
