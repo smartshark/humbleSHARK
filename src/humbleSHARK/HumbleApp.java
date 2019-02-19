@@ -251,7 +251,8 @@ public class HumbleApp {
 		Commit blamedCommit = adapter.getCommit(hbl.getBlamedCommitId());
 		Optional<FileAction> optional = allFileActions.stream().filter(x->x.getCommitId().equals(hbl.getBlamedCommitId())).findFirst();
 		if (!optional.isPresent()) {
-			//blames are sometimes incorrectly assigned
+			//blames assigned to merged commits
+			//or to commits of a renamed file that is not resolved (due to merge dynamics 
 			logger.warn("Corresponding action in blamed commit cannot be resolved:"
 			+" "+blamedCommit.getRevisionHash().substring(0, 8) 
 			+" parents="+blamedCommit.getParents().size() 
@@ -260,6 +261,7 @@ public class HumbleApp {
 			+"->"+hbl.getSourceLine()
 			+" in "+hbl.getSourcePath()
 			);
+			//fallback
 			return hbl;
 		} else {
 			FileAction blamedAction = optional.get();
