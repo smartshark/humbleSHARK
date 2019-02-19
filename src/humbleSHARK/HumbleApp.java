@@ -260,6 +260,7 @@ public class HumbleApp {
 			+"->"+hbl.getSourceLine()
 			+" in "+hbl.getSourcePath()
 			);
+			return hbl;
 		} else {
 			FileAction blamedAction = optional.get();
 			
