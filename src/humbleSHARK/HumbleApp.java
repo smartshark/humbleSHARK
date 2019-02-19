@@ -70,8 +70,7 @@ public class HumbleApp {
 		targetstore = adapter.getTargetstore();
 		String name = HumbleParameter.getInstance().getUrl().substring(HumbleParameter.getInstance().getUrl().lastIndexOf("/")+1).replaceAll("\\.git", "");
 		if (HumbleParameter.getInstance().isSeparateDatabase()) {
-			String dateName = name+"-"+LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-			targetstore = adapter.getTargetstore("localhost", 27017, "humbleSHARK-"+dateName);
+			targetstore = adapter.getTargetstore("localhost", 27017, "localSHARK-"+name);
 		}
 		adapter.setVcs(HumbleParameter.getInstance().getUrl());
 		if (adapter.getVcs()==null) {
