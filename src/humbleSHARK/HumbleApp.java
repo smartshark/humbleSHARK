@@ -68,10 +68,10 @@ public class HumbleApp {
 		adapter.setPluginName("humbleSHARK");
 		adapter.setRecordProgress(HumbleParameter.getInstance().isRecordProgress());
 		targetstore = adapter.getTargetstore();
+		String name = HumbleParameter.getInstance().getUrl().substring(HumbleParameter.getInstance().getUrl().lastIndexOf("/")+1).replaceAll("\\.git", "");
 		if (HumbleParameter.getInstance().isSeparateDatabase()) {
-			String name = HumbleParameter.getInstance().getUrl().substring(HumbleParameter.getInstance().getUrl().lastIndexOf("/")+1).replaceAll("\\.git", "");
-			name+="-"+LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-			targetstore = adapter.getTargetstore("localhost", 27017, "humbleSHARK-"+name);
+			String dateName = name+"-"+LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+			targetstore = adapter.getTargetstore("localhost", 27017, "humbleSHARK-"+dateName);
 		}
 		adapter.setVcs(HumbleParameter.getInstance().getUrl());
 		if (adapter.getVcs()==null) {
@@ -89,7 +89,11 @@ public class HumbleApp {
 		}
 
 		if (HumbleParameter.getInstance().isFollowCopies()) {
-			adapter.constructFileActionMap();
+			if (HumbleParameter.getInstance().isCacheActions()) {
+				adapter.constructCachedFileActionMap(name);
+			} else {
+				adapter.constructFileActionMap();
+			}
 		}
 	}
 
@@ -257,7 +261,7 @@ public class HumbleApp {
 			FileAction blamedAction = optional.get();
 			
 			//if copy or rename
-			//TODO: check if required for renames..
+			//required for renames in case ignore renames is activated, possibly other cases as well
 			if (blamedAction.getMode().equals("C") || blamedAction.getMode().equals("R")) {
 				
 				List<Hunk> blamedActionHunks = adapter.getHunks(blamedAction);
@@ -266,12 +270,10 @@ public class HumbleApp {
 				LinkedHashMap<Integer, Hunk> linesPostMap = getLinesPostMap(blamedActionHunks);
 				if (!linesPostMap.containsKey(hbl.getSourceLine())) {
 					//not hit -> trace back
-					
 					if (allFileActions.indexOf(blamedAction) > 0) {
-						//TODO: cache?
-						FileAction blamedActionParent = allFileActions.get(allFileActions.indexOf(blamedAction)-1);
-						Commit blamedActionParentCommit = adapter.getCommit(blamedActionParent.getCommitId());
-						String blamedActionParentPath = adapter.getFile(blamedActionParent.getFileId()).getPath();
+						String blamedActionParentPath = adapter.getFile(blamedAction.getOldFileId()).getPath();
+						//TODO: parameterize?
+						String blamedCommitParent = getParentRevisionFromDB(blamedCommit.getRevisionHash(), blamedActionParentPath);
 						
 						//get offset
 						LinkedHashMap<Integer,Integer> hunksLineMap = hsh.getHunksLineMap(blamedActionHunks);
@@ -280,23 +282,43 @@ public class HumbleApp {
 								.filter(l -> l <= hbl.getSourceLine())
 								.map(l -> hunksLineMap.get(l))
 								.reduce((f, s) -> s).orElse(0);
-	
+						//TODO: cache?
+						BlameResult blamedActionParentBlame = null;
 						try {
 							//get blame for parent
-							BlameResult blamedActionParentBlame = getBlameResult(blamedActionParentCommit.getRevisionHash(), blamedActionParentPath);
+							//use parent instead of previous action
+							//can help with merge side effects in hunks causing off-by-N errors
+							blamedActionParentBlame = getBlameResult(blamedCommitParent, blamedActionParentPath);
+							int blamedActionParentLine = hbl.getSourceLine()-d;
 							
 							//check if blame exists (should be missing on first commits only)
 							if (blamedActionParentBlame != null) {
-								int blamedActionParentLine = hbl.getSourceLine()-d;
 								HunkBlameLine realhbl = getBlameLine(blamedActionParentBlame, blamedActionParentLine, hbl.getHunkId());
 								//override with the original hunk line
 								realhbl.setHunkLine(hbl.getHunkLine());
 								//recursive check
 								realhbl = trackAcrossCopies(realhbl, allFileActions);
 								return realhbl;
+							} else {
+								logger.warn("FIX: Blame result for parent could not be calculated"
+										+" "+blamedAction.getMode() 
+										+" "+blamedCommit.getRevisionHash().substring(0,8)
+										+" --parent--> "+blamedCommitParent.substring(0,8)
+										+" "+blamedActionParentPath);
+								return hbl;
 							}
 						} catch (Exception e) {
-							logger.warn(e.getMessage());
+							logger.warn("FIX: "+e.getMessage());
+							logger.warn("" 
+									+" "+blamedAction.getMode() 
+									+" "+blamedCommit.getRevisionHash().substring(0,8)
+									+" --parent--> "+blamedCommitParent.substring(0,8)
+									+" "+blamedActionParentPath
+									+" Line: "+hbl.getSourceLine()
+									+" Difference: "+d
+									+" Blame size: "+blamedActionParentBlame.getResultContents().size()
+									);
+							
 							e.printStackTrace();
 							if (e.getMessage()==null) {
 								e.printStackTrace();
@@ -416,7 +438,7 @@ public class HumbleApp {
 				blameLines.addAll(getBlameLines(h, blame));
 			}
 		} catch (Exception e) {
-			logger.warn(e.getMessage());
+			logger.error(e.getMessage());
 			e.printStackTrace();
 			if (e.getMessage()==null) {
 				e.printStackTrace();
@@ -537,8 +559,8 @@ public class HumbleApp {
 				walk.close();
 				revisionCache.put(hash, commit);
 			} catch (Exception e) {
-				logger.warn("Revision "+hash+ " could not be found in the git repository");
-				logger.warn("  "+e.getMessage());
+				logger.error("Revision "+hash+ " could not be found in the git repository");
+				logger.error("  "+e.getMessage());
 			}
 		}
 		return revisionCache.get(hash);
