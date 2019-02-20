@@ -7,6 +7,6 @@ Automatic-Module-Name: humbleSHARK
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8
 Main-Class: humbleSHARK.HumbleApp
 Require-Bundle: commonSHARK
-Bundle-ClassPath: lib/org.eclipse.jgit_5.0.0.201806131550-r.jar,
- .
-Export-Package: humbleSHARK
+Bundle-ClassPath: .
+Export-Package: common.humble,
+ humbleSHARK

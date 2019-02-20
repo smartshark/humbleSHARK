@@ -24,6 +24,7 @@ import org.mongodb.morphia.Datastore;
 import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Logger;
+import common.GitAdapter;
 import common.HunkSignatureHandler;
 import common.MongoAdapter;
 import common.humble.HumbleParameter;
@@ -41,10 +42,9 @@ import de.ugoe.cs.smartshark.model.VCSSystem;
 public class HumbleApp {
 	protected MongoAdapter adapter;
 	protected Datastore targetstore;
-	private HashMap<String, RevCommit> revisionCache = new HashMap<>();
 	protected VCSSystem vcs;
-	protected Repository repository;
 	protected HunkSignatureHandler hsh = new HunkSignatureHandler();
+	protected GitAdapter gitAdapter;
 	protected static Logger logger = (Logger) LoggerFactory.getLogger(HumbleApp.class.getCanonicalName());
 
 	public static void main(String[] args) {		
@@ -77,11 +77,10 @@ public class HumbleApp {
 			logger.error("No VCS information found for "+HumbleParameter.getInstance().getUrl());
 			System.exit(1);
 		}
-
+		
 		try {
-			repository = FileRepositoryBuilder.create(
-				new java.io.File(HumbleParameter.getInstance().getRepoPath()+"/.git"));
-			adapter.setRevisionHashes(getOrderedRevisionHashes());
+			gitAdapter = new GitAdapter(HumbleParameter.getInstance().getRepoPath()+"/.git");
+			adapter.setRevisionHashes(gitAdapter.getOrderedRevisionHashes());
 		} catch (IOException e) {
 			e.printStackTrace();
 			System.exit(1);
@@ -564,42 +563,7 @@ public class HumbleApp {
 		return compressedBlameLines;
 	}
 	
-	RevCommit getRevision(String hash) throws Exception {
-		if (!revisionCache.containsKey(hash)) {
-			try (RevWalk walk = new RevWalk(repository)) {
-				RevCommit commit = walk.parseCommit(repository.resolve(hash));
-				walk.close();
-				revisionCache.put(hash, commit);
-			} catch (Exception e) {
-				logger.error("Revision "+hash+ " could not be found in the git repository");
-				logger.error("  "+e.getMessage());
-			}
-		}
-		return revisionCache.get(hash);
-    }
-	
 	BlameResult getBlameResult(String hash, String path) throws Exception {
-		BlameCommand blamer = new BlameCommand(repository);
-		blamer.setStartCommit(getRevision(hash));
-		blamer.setFilePath(path);
-		//TODO: check differences in outcomes, as the setting may be unreliable in some cases
-		blamer.setFollowFileRenames(!HumbleParameter.getInstance().isIgnoreRenames());
-		BlameResult blame = blamer.call();
-		return blame;
-	}
-
-	List<String> getOrderedRevisionHashes() {
-		List<String> revisionHashes = new ArrayList<String>();
-		try (Git git = new Git(repository)) {
-            Iterable<RevCommit> revs = git.log().all().call();
-            for (RevCommit rev : revs) {
-            	revisionHashes.add(rev.getName());
-            }
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		Collections.reverse(revisionHashes);
-		return revisionHashes;
+		return gitAdapter.getBlameResult(hash, path, !HumbleParameter.getInstance().isIgnoreRenames());
 	}
 }
